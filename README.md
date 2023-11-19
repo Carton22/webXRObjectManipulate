@@ -11,6 +11,6 @@ This is a repository to implement some basic hand interaction operations in the 
 ### How to run
 
 ```shell
-npm vite
+npx vite
 ```
 
