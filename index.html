@@ -101,6 +101,7 @@
 				execute(/*delta, time*/) {
 					this.queries.draggable.results.forEach((entity) => {
 						const draggable = entity.getMutableComponent(Draggable);
+						console.log("draggable", draggable);
 						const object = entity.getComponent(Object3D).object;
 						if (draggable.originalParent == null) {
 							draggable.originalParent = object.parent;
@@ -116,7 +117,8 @@
 								draggable.state = "detached";
 								break;
 							default:
-								object.scale.set(1, 1, 1);
+								console.log("dragging",object.scale);
+								break;
 						}
 					});
 				}
@@ -135,32 +137,42 @@
 				state: { type: Types.String, default: "none" },
 				startDistance: { type: Types.Number, default: 0 },
 				startScale: { type: Types.Ref, default: new THREE.Vector3(1, 1, 1) },
-				attachedPointer: { type: Types.Ref, default: null },
+				attachedPointers: { type: Types.Array },
 			};
 
 			class ScaleSystem extends System {
 				execute(/*delta, time*/) {
-					this.queries.scaleables.results.forEach((entity) => {
+					this.queries.scaleable.results.forEach((entity) => {
 						const scaleable = entity.getMutableComponent(Scaleable);
+						console.log("146 scaleable", scaleable);
 						const object = entity.getComponent(Object3D).object;
 
-						if (scaleable.state == "scaling") {
+						if (
+							scaleable.state == "scaling" &&
+							scaleable.attachedPointers.length == 2
+						) {
+							console.log("continue to scale");
 							const currentDistance =
-								scaleable.attachedPointers[1].position.distanceTo(
-									scaleable.attachedPointers[0].position
+								scaleable.attachedPointers[1].controller.position.distanceTo(
+									scaleable.attachedPointers[0].controller.position
 								);
+							console.log("currentdistance", currentDistance);
+							console.log("scaleabledistance", scaleable.startDistance);
 							const scaleFactor = currentDistance / scaleable.startDistance;
+							// const scaleFactor = currentDistance;
 							const newScale = scaleable.startScale
 								.clone()
 								.multiplyScalar(scaleFactor);
+							console.log("newScale", newScale);
 							object.scale.copy(newScale);
+							console.log("object scale", object.scale);
 						}
 					});
 				}
 			}
 
 			ScaleSystem.queries = {
-				scaleables: {
+				scaleable: {
 					components: [Scaleable],
 				},
 			};
@@ -201,7 +213,6 @@
 								const draggable =
 									intersectingEntity.getMutableComponent(Draggable);
 								const object = intersectingEntity.getComponent(Object3D).object;
-								object.scale.set(1.1, 1.1, 1.1);
 								if (hp.isPinched()) {
 									if (!hp.isAttached() && draggable.state != "attached") {
 										draggable.state = "to-be-attached";
@@ -217,59 +228,54 @@
 									}
 								}
 							}
-						} else {
-							hp.setCursor(1.5);
-						}
 
-						if (
-							this.handPointers[0].isPinched() &&
-							this.handPointers[1].isPinched()
-						) {
-							const hp1 = this.handPointers[0];
-							const hp2 = this.handPointers[1];
-							let intersectingEntity = null;
-							let distance = null;
-
-							if (this.queries.intersectable.results.length == 1) {
-								intersectingEntity = this.queries.intersectable.results[0];
+							if (intersectingEntity.hasComponent(Scaleable)) {
 								const scaleable =
 									intersectingEntity.getMutableComponent(Scaleable);
 								const object = intersectingEntity.getComponent(Object3D).object;
+								if (hp.isPinched()) {
+									if (
+										scaleable.state == "none" &&
+										scaleable.attachedPointers.length == 0
+									) {
+										scaleable.state = "single-scaling";
+										scaleable.attachedPointers.push(hp);
+									}
 
-								// Check if the entity is not already in the scaling state
-								if (intersectingEntity.hasComponent(Scaleable)) {
-									if (scaleable.state == "none") {
+									if (
+										scaleable.state == "single-scaling" &&
+										scaleable.attachedPointers.length == 1 &&
+										scaleable.attachedPointers[0] != hp
+									) {
 										scaleable.state = "scaling";
+										scaleable.attachedPointers.push(hp);
 										scaleable.startScale.copy(object.scale);
-										scaleable.startDistance = hp1.position.distanceTo(
-											hp2.position
+										scaleable.startDistance = scaleable.attachedPointers[1].controller.position.distanceTo(
+											scaleable.attachedPointers[0].controller.position
 										);
-										scaleable.attachedPointers = [hp1, hp2];
+										console.log("269", scaleable.startDistance);
+									}
+								} else {
+									if (scaleable.state == "scaling") {
+										scaleable.state = "single-scaling";
+										scaleable.attachedPointers.pop(hp);
+										scaleable.startDistance = 0;//set to default value
+									}
+
+									if (
+										scaleable.state == "single-scaling" &&
+										scaleable.attachedPointers.length == 1 && scaleable.attachedPointers[0] == hp
+									) {
+										scaleable.state = "none";
+										scaleable.attachedPointers.pop(hp);
 									}
 								}
-							} else {
-								this.queries.intersectable.results.forEach((entity) => {
-									const scaleable = entity.getMutableComponent(Scaleable);
-									if (entity.hasComponent(Scaleable)) {
-										if (scaleable.state == "scaling") {
-											scaleable.state = "none";
-											scaleable.attachedPointers = [];
-										}
-									}
-								});
 							}
 						} else {
-							this.queries.intersectable.results.forEach((entity) => {
-								const scaleable = entity.getMutableComponent(Scaleable);
-								if (entity.hasComponent(Scaleable)) {
-									if (scaleable.state == "scaling") {
-										scaleable.state = "none";
-										scaleable.attachedPointers = [];
-									}
-								}
-							});
+							hp.setCursor(1.5);
 						}
 					});
+
 				}
 			}
 
@@ -361,17 +367,17 @@
 
 						object.material.color.setHex(Math.random() * 0xffffff);
 
-						object.position.x = Math.random() * 2 - 1;
-						object.position.y = Math.random() * 2;
-						object.position.z = Math.random() * 2 - 1;
-
 						object.rotation.x = Math.random() * 2 * Math.PI;
 						object.rotation.y = Math.random() * 2 * Math.PI;
 						object.rotation.z = Math.random() * 2 * Math.PI;
 
-						object.scale.x = Math.random() + 0.5;
-						object.scale.y = Math.random() + 0.5;
-						object.scale.z = Math.random() + 0.5;
+						object.scale.x = 1;
+						object.scale.y = 1;
+						object.scale.z = 1;
+
+						object.position.x = 0;
+						object.position.y = 1.5;
+						object.position.z = -0.4;
 						this.needRandomizing = false;
 					});
 				}
@@ -537,12 +543,12 @@
 					})
 					.registerSystem(ButtonSystem)
 					.registerSystem(DraggableSystem)
+					.registerSystem(ScaleSystem)
 					.registerSystem(HandRaySystem, {
 						handPointers: [handPointer1, handPointer2],
-					})
-					.registerSystem(ScaleSystem);
+					});
 
-				for (let i = 0; i < 20; i++) {
+				for (let i = 0; i < 1; i++) {
 					const object = new THREE.Mesh(
 						new THREE.BoxGeometry(0.15, 0.15, 0.15),
 						new THREE.MeshLambertMaterial({ color: 0xffffff })
@@ -554,7 +560,7 @@
 					entity.addComponent(Randomizable);
 					entity.addComponent(Object3D, { object: object });
 					entity.addComponent(Draggable);
-					entity.addComponent(Scaleable);
+					entity.addComponent(Scaleable); // Adding Scaleable component
 				}
 
 				const menuEntity = world.createEntity();
