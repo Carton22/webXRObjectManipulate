@@ -1,0 +1,48 @@
+<html>
+  <head>
+    <title>Stream</title>
+  </head>
+  <body>
+    <button>Connect</button>
+    <script type="module">
+      const ws = import.meta.hot;
+      let stream;
+
+      async function connect() {
+        if (!stream) {
+          stream = await navigator.mediaDevices.getDisplayMedia({
+            video: { frameRate: 30, displaySurface: "monitor" },
+          });
+        }
+
+        const pc = new RTCPeerConnection();
+        stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+
+        // Send an SDP offer
+        const offer = await pc.createOffer();
+        pc.setLocalDescription(offer);
+        ws.send("rtc:offer", JSON.stringify(offer));
+
+        // Recieve the SDP answer
+        ws?.on("rtc:answer", async (data) => {
+          await pc.setRemoteDescription(JSON.parse(data));
+          console.log("remote display stream started");
+        });
+
+        // Send ICE candidate messages
+        pc.addEventListener("icecandidate", (e) => {
+          if (e.candidate) ws.send("rtc:ice", JSON.stringify(e.candidate));
+        });
+
+        // Recieve ICE candidate messages
+        ws?.on("rtc:ice", async (data) => {
+          pc.addIceCandidate(new RTCIceCandidate(JSON.parse(data)));
+        });
+      }
+
+      // Listen for connect events
+      ws?.on("rtc:connect", connect);
+      document.querySelector("button").addEventListener("click", connect);
+    </script>
+  </body>
+</html>
