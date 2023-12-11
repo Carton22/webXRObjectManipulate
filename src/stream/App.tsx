@@ -1,5 +1,5 @@
 import { Canvas } from "@react-three/fiber";
-import { XRButton, Controllers, XR, RayGrab } from "@react-three/xr";
+import { XRButton, Controllers, Hands, XR, RayGrab } from "@react-three/xr";
 import { Holodeck } from "./Holodeck";
 import { RemoteDisplay } from "./RemoteDisplay";
 
@@ -23,7 +23,8 @@ export default function App() {
           <Holodeck />
           {lights}
           {cube}
-          <Controllers />
+          {/* <Controllers /> */}
+          <Hands />
         </XR>
       </Canvas>
     </>
